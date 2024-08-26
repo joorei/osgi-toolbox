@@ -65,6 +65,9 @@ class RegisteredOsgiBundle implements RegisteredBundle {
 			// TODO: check readability/file type
 			this.registrationTime = Checks.requireNonNull(Instant.now());
 			this.bundleRegistry = bundleRegistry;
+			
+			// check if JAR was already registered
+			// TODO: check via checksum additionally or instead of path
 			final Optional<RegisteredOsgiBundle> existingBundle = bundleRegistry.getBundleRegisteredFrom(jarFile);
 			if (existingBundle.isPresent()) {
 				throw new BundleAlreadyRegisteredException(jarFile, existingBundle.get());

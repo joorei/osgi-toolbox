@@ -1,0 +1,53 @@
+= Contract Recommendations
+
+== Supporting older bundle versions
+
+After you published an interface via a contract project you have to be careful when changing that interface, e.g. by adding methods.
+The new methods can be implemented by new and updated bundles, but old bundles will not contain an implementation, resulting in the corresponding functionality missing from them.
+
+E.g. in xref:usage-details.adoc[Usage Details] we defined the `Book` interface containing a `getTitle()` method only.
+Suppose we add a `String getAuthor()` method to this interface and call it in our application.
+Up-to-date bundles implementing that method will work as expected.
+However, old bundles not implementing this method will throw an `AbstractMethodError` when the method is called.
+There are different ways to support older bundles in such cases.
+
+=== 1. Pessimistic approach: avoid calling missing methods (recommended)
+
+It is possible to check if an expected method is actually implemented before calling it.
+For this you need to retrieve the class of the instance in question, e.g. `var bookClass = book.getClass()`.
+Then you can use `bookClass.getDeclaredMethod`/`bookClass.getDeclaredMethods` to test for the expected method.
+
+For many instances, e.g. many books, you may want to optimize this approach.
+For example you could check the declared methods on the first `Book` instance only and then just check if the following book instances return the same class reference as the first one when calling `getClass()`.
+If they do, there is no need to check the declared methods again.
+
+=== 2. Optimistic approach: try-catch (potentially slow)
+
+You can wrap each method call in a try-catch and try to handle the `AbstractMethodError` in your application.
+This however may have a noticeable performance impact, as exceptions are slow in creation due to the collected stack trace.
+
+=== 3. Typed approach: separate interfaces (complex)
+
+An alternative approach is to not add methods to previously published contracts but to create a separate interface for the new method, e.g. `getAuthor()` in a `AuthoredBook` interface.
+You can either let the new interface extend from the original `Book` interface, which may be useful depending on the specific case, or keep it as separate, unrelated interface for which you can check if it is implemented by a `Book` instance in question.
+
+If you do extend from the original interface, it suffices to register an implementing service instance once under the new interface in the bundles.
+
+However, if you do not extend the new interface from the original interface and your service implements both interfaces, you need to register the service instance multiple times, as is recommended in general for services implementing multiple, unrelated interfaces.
+
+Either way, when loading services in your application, you need to retrieve services implementing the old bundle and the new bundle separately, because the hierarchy of registered services does not matter.
+Only under which exact interface services were registered determines by which interface they can be retrieved.
+
+== Allow evolving contracts
+
+When designing your contract project you may have the option to avoid breaking changes when adding capabilities by inverting responsibilities.
+E.g. in the example above we broke compatibility when adding the `String getAuthor()` method to the `Book` interface.
+
+However, instead of using a `Book` interface a `BookForm` interface could have been used too.
+Such interface would not provide getters but setters and its implementation would be provided by your application to the bundles.
+I.e. when importing books from a bundle you would provide it with a `BookForm` instance, on which the bundle calls the `void setTitle(String title)` method.
+When you want to support additional information like the author, you would add a `void setAuthor(String author)` method to the `BookForm`.
+This keeps compatibility with bundles not updated to the newest contract, as they would simply continue calling the `setBook` method but ignore the `setAuthor` method unknown to them.
+New and updated bundles on the other hand would be aware of the existence of the `setAuthor` method and can opt to call it.
+
+How your application handles the case that the `setAuthor` method was not called (especially if it a required information) is up to you.

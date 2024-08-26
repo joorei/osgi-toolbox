@@ -1,0 +1,31 @@
+= README
+
+This library provides a mechanism to add or remove OSGi bundles within your application during runtime.
+In sum it can be considered a simple plug-in/add-on manager.
+
+== Prerequisites
+
+To use this library you need some basic Java knowledge (Java 17 is a requirement to use this library).
+Maven is recommended to build the bundles and basic knowledge how to use it is assumed in this documentation.
+You can use a different build tool too, as long as you are able to use it to create valid OSGi bundles.
+
+== Usage
+
+1. Create a Maven contract project, in which you define the Java types of your application that should be available to bundles.
+2. Create a Maven project for a new bundle and implement one or multiple interfaces from your contract project as well as a `BundleActivator` class that exposes these implementations when the bundle is used.
+3. Build your bundle project as OSGi bundle to create a bundle JAR file.
+4. Instantiate the `BundleRegistry` provided by this library in your application and register bundle files into it.
+5. Optionally show bundle information (e.g. potential conflicts with other bundles) in your application.
+6. Install and start the registered bundle to make its interface implementations available in your application.
+7. Retrieve the implementations and call them where needed.
+
+For details regarding the individual usage steps, see xref:usage-details.adoc[Usage Details].
+
+For recommendations how to design the contract project, see xref:contract-recommendations.adoc[Contract Recommendations].
+
+== Notes regarding the usage of OSGi
+
+While OSGi was successfully used as backbone of this library's implementation, this does **not** necessarily mean that it *should* be used this way.
+The author is in no regard an OSGi expert and simply approached the topic with what seemed like reasonable solutions.
+
+Also note that the direct usage of OSGi offers more flexibility regarding the high level architecture of your application.

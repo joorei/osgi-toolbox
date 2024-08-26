@@ -1,0 +1,341 @@
+= Usage Details
+
+To make the usage explanations less abstract we will use a specific example.
+Assume you want to collect the book indexes of different libraries into a single application.
+To do so you'd need to access the (existing) web API of that library, retrieve each book entry and convert it into the schema used inside your application.
+Because there are many different libraries with different APIs you don't want to include the library specific code in your actual application, but externalize it into bundles (one for each library) instead.
+
+== 1. Create the contract project
+
+First you need to define which types should not only be available in your application but in bundles too.
+This is done by defining a separate interface for each functionality.
+Within the actual application you will be able to collect all implementations of all bundles for a specific interface.
+For each bundle its author can chose which of those interfaces to implement and their implementation details.
+
+For the example described above you need a `Book` interface representing the entries in the library indexes and a `BookImporter` interface, that provides a list of such `Book` instances.
+
+[source,java]
+----
+/**
+ * @since 1.0.0
+ */
+public interface Book {
+	/**
+	 * @since 1.0.0
+	 */
+	public String getTitle();
+}
+----
+
+[source,java]
+----
+/**
+ * @since 1.0.0
+ */ 
+public interface BookImporter {
+	/**
+	 * @since 1.0.0
+	 */
+	public Collection<Book> getBooks();
+}
+----
+
+We recommended to use the `@since x.y.z` docblock tag for all interfaces and their methods in case your contract project changes over time.
+
+For this example no additional dependencies are needed for the contract project.
+You can create a simple Maven project containing the two classes above with the following `pom.xml`.
+
+[source,xml]
+----
+<project
+	xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+	<modelVersion>4.0.0</modelVersion>
+	<artifactId>test-bundle-contract</artifactId>
+	<groupId>org.codeturnery</groupId>
+	<version>1.0.0</version>
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<java.version>17</java.version>
+	</properties>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.3</version>
+				<configuration>
+					<source>${java.version}</source>
+					<target>${java.version}</target>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+</project>
+----
+
+It can be built with `mvn install`.
+
+== 2. Create the bundle project
+
+For an actual bundle you need to create another Maven project with the contract project described above as dependency.
+You will also need to define OSGi as dependency to implement `BundleActivator` (more on that interface below).
+
+Both the contract and OSGi dependency can be set to the scope `provided`, as they will be already present later in your actual application.
+Your `<dependencies>` section in your Maven `pom.xml` could look something like the following, but note that you can add any additional dependencies needed by this specific bundle.
+
+[source,xml]
+----
+<dependencies>
+	<dependency>
+		<groupId>org.codeturnery</groupId>
+		<artifactId>test-bundle-contract</artifactId>
+		<version>1.0.0</version>
+		<scope>provided</scope>
+	</dependency>
+
+	<dependency>
+		<groupId>org.osgi</groupId>
+		<artifactId>org.osgi.core</artifactId>
+		<version>8.0.0</version>
+		<scope>provided</scope>
+	</dependency>
+</dependencies>
+----
+
+Within the bundle project you need to implement the interfaces for the functionalities you want to provide.
+E.g. in our example we want to provide a `BookImporter` implementation, which returns books.
+(The books are hardcoded for the sake of this example):
+
+[source,java]
+----
+package org.codeturnery.osgi.fixtures.bundles.a;
+
+public class BookImpl implements Book {
+
+	private String title;
+
+	public BookImpl(String title) {
+		this.title = title;
+	}
+
+	@Override
+	public String getTitle() {
+		return this.title;
+	}
+}
+----
+
+[source,java]
+----
+package org.codeturnery.osgi.fixtures.bundles.a.importer;
+
+public class BookImporterImpl implements BookImporter {
+	@Override
+	public Collection<Book> getBooks() {
+		return Arrays.asList(
+				new BookImpl("Steven King", "The Dark Tower"),
+				new BookImpl("J. R. R. Tolkien", "The Hobbit"));
+	}
+}
+----
+
+However, just implementing the interfaces is not sufficient to make the implementations available to your application.
+You need to register instances of them too.
+
+Registering one or multiple instances of your interface implementation can simply be done by implementing an OSGi `BundleActivator`.
+In the following example we create a `BookImporterImpl` instance and register it as an OSGi "service".
+
+It is important to chose the first parameter in `registerService(…)` carefully.
+This should be the interface from your contract project that is implemented by the exported service instance.
+Using a different type may result in the registered service not being found after starting the bundle in your application.
+
+If your service implements multiple (unrelated) interfaces you should register the instance once under each interface.
+
+[source,java]
+----
+package org.codeturnery.osgi.fixtures.bundles.a;
+
+public class ActivatorImpl implements BundleActivator {
+	private ServiceRegistration<BookImporter> registration;
+
+	@Override
+	public void start(final BundleContext context) {
+		final var config = new Hashtable<String, String>();
+		final var bookImporter = new BookImporterImpl();
+		this.registration = context.registerService(BookImporter.class, bookImporter, config);
+	}
+
+	@Override
+	public void stop(final BundleContext context) {
+		if (this.registration != null) {
+			this.registration.unregister();
+		}
+	}
+}
+----
+
+The `start` method will automatically be called when you start the bundle in your application and our `bookImporter` instance would be created at that point.
+Likewise the `stop` method will be called when you stop the bundle in your application.
+In this example we only need to remove the registration to allow the garbage collector to clean up the `nameProvider` instance, but depending on your use-case and interface design you may want to close database connections and the like used by the stopped bundle at this point too.
+
+Please note that directly instantiating a performance heavy class when the bundle is started may not be ideal.
+Instead, factories may be instantiated as service, which can be used in the application to create the corresponding instances when actually needed.
+However, such considerations affect the design of the contract project, as it needs to define the interfaces for such factories.
+
+== 3. Build your bundle project
+
+After implementing the classes in your bundle project, you need to build a valid OSGi bundle from it.
+To do so you need to configure the Maven `pom.xml` accordingly.
+First you must set the `packaging` to `bundle`.
+*Do not forget this, as it is hard to debug if you do.*
+Secondly you need to configure the `maven-bundle-plugin`.
+An example with the important snippets is shown below:
+
+[source,xml]
+----
+<artifactId>test-bundle-a</artifactId>
+<packaging>bundle</packaging>
+
+<build>
+	<plugins>
+		<plugin>
+			<groupId>org.apache.felix</groupId>
+			<artifactId>maven-bundle-plugin</artifactId>
+			<version>5.1.4</version>
+			<extensions>true</extensions>
+			<configuration>
+				<instructions>
+					<Bundle-SymbolicName>${project.groupId}.${project.artifactId}</Bundle-SymbolicName>
+					<Bundle-Name>${project.name}</Bundle-Name>
+					<Bundle-Version>${project.version}</Bundle-Version>
+					<Bundle-Activator>org.codeturnery.osgi.fixtures.bundles.a.ActivatorImpl</Bundle-Activator>
+					<Export-Package>org.codeturnery.osgi.fixtures.bundles.a.importer</Export-Package>
+					<Embed-Transitive>true</Embed-Transitive>
+					<Embed-Dependency>*;scope=compile|runtime</Embed-Dependency>
+				</instructions>
+			</configuration>
+		</plugin>
+	</plugins>
+</build>
+----
+
+Make sure the correct class path is set in `Bundle-Activator` and that you set the package containing the implementation of the exported service implementation (i.e. `ImporterImpl` in `Export-Package`).
+
+When executing `mvn package` you should now get a JAR file in your `target` folder, being your bundle file.
+In this example `test-bundle-a-1.0.0.jar`.
+
+== 4. Instantiate the bundle registry and bundles in your application
+
+Within your application in which you want to use the bundles, you need to add at least two Maven dependencies: this library and all contract projects with the `compile` scope (which is used by default).
+
+Definitions for specific bundles do *not* need to be added to this `pom.xml`.
+Doing so would introduce unnecessary code coupling, as the main application is not supposed to know about possible bundles at compile time.
+
+[source,xml]
+----
+<dependencies>
+	<dependency>
+		<groupId>org.codeturnery</groupId>
+		<artifactId>osgi-toolbox</artifactId>
+		<version>0.9.0</version>
+	</dependency>
+
+	<dependency
+		<groupId>org.codeturnery</groupId
+		<artifactId>test-bundle-contract</artifactId
+		<version>1.0.0</version>
+	</dependency>
+</dependencies>
+----
+
+Afterwards, you can instantiate a `BundleRegistry` instance in your application.
+Technically it is possible to use multiple `BundleRegistry` instances for different sets of bundles, but this is discouraged because it does not avoid conflicts between bundles in different sets but instead makes it harder to detect them.
+
+This library provides `OsgiBundleRegistry` as implementation of the `BundleRegistry` interface, though you may use a different implementation if needed.
+
+When instantiating the `OsgiBundleRegistry` you need to pass information about the packages of all your contract projects into its constructor.
+In our example we only created one contract project: `test-bundle-contract` with the most recent version `1.0.0`., which we pass into the constructor.
+
+Tests have shown `javassist` and `javassist.bytecode` to be necessary too, as shown below.
+
+[source,java]
+----
+final var extras = new HashSet<>(Arrays.asList(
+	"org.codeturnery.osgi.fixtures.bundles.contract.test-bundle-contact; version=1.0.0, javassist, javassist.bytecode"));
+try (final var bundleRegistry = new OsgiBundleRegistry(extras);) {
+	// …
+}
+----
+
+The `OsgiBundleRegistry` implements `Closeable` and thus can be used in a try-with-resources manner or closed manually after the bundle system is no longer needed (e.g. when the application is shut down).
+
+Registering bundles into the container is done by referencing their JAR files.
+Each JAR file can only be registered once at a given time to avoid conflicts.
+
+[source,java]
+----
+var bundleJarFile = new File("/path/to/the/jar/file.jar");
+RegisteredBundle bundle = bundleRegistry.registerBundle(bundleJarFile);
+----
+
+The `bundle` does not provide its functionalities to the application as long as it is only registered.
+More on that later.
+
+To unregister a bundle you can call `bundle.unregister()`.
+To do so it must be neither started nor installed.
+To register the bundle again, simply use the bundle container as shown above.
+
+== 5. (Optional) retrieve bundle information
+
+Even though the bundle does not provide its functionality after only being registered into the registry, it can already be used to retrieve some information, including potential conflicts via its `getConflicts()` method.
+Conflicts between different bundles can occur for different reasons.
+This library currently checks two different kinds:
+
+1. The `Bundle-SymbolicName` field in each of your bundles Maven `pom.xml` is supposed to be unique.
+If there are other registered bundles that use the same symbolic name as the bundle you called `getConflicts()` on, then these will be present as potential conflicts in the return, even if their version differs.
+2. Different bundles that define the same fully qualified class name with different implementation, if the content of those classes differ.
+
+If conflicting bundles are installed or started the result may be class cast exceptions during runtime but also especially hard to debug behavioral changes: in the case that one bundle implements the conflicting class differently than the other bundle, it may use the other bundles implementation.
+Which bundle wins over which is in some cases influenced by the order in which they are installed and started, but overall hardly controllable.
+
+The conflicts will have no effect as long as the bundles are registered only.
+The choice of installing and starting bundles with conflicts is left to the application and not prevented by this library, as even if bundles potentially conflict they may still provide usable functionalities.
+
+== 6. Install and start the bundles
+
+After registering a bundle, it can be simply installed via `install()`.
+After installing it, it can be started via the `start()` method.
+Note that when changing the stage of a bundle (e.g. from registered to installed) the old reference becomes expired and must not be used anymore.
+Instead, you must use the new instance returned by the method that invoked the stage change (e.g. `install()` returning `InstalledBundle` and `uninstall()` returning `RegisteredBundle`).
+
+Installing a bundle is a necessary step between registration and start, but currently has otherwise no special effects.
+It may be extended in the future for dependencies between different bundles, to allow installing a dependency without starting it.
+
+To stop a started bundle, you can use the `stop()` method.
+To uninstall a stopped bundle you can use the `uninstall()` method.
+Again, the instances on which the `stop()` or `uninstall()` methods were called will return new instances and the original instances must not be used afterwards.
+
+== 7. Retrieve bundle services
+
+To use the services of your started bundles (the interface implementations you registered in your bundles `Activator`) you can fetch them wrapped inside another instances from the `BundleRegistry` and issue the logic to be executed by calling the `callService` method on each wrapper instance with a callback.
+In the callback you will receive the actual service instance as parameter.
+
+[source,java]
+----
+final List<OsgiServiceWrapper<BookImporter>> bookImporterProxies = bundleRegistry.loadServices(BookImporter.class);
+for (final OsgiServiceWrapper<BookImporter> bookImporterProxy : bookImporterProxies) {
+	bookImporterProxy.callService(bookImporter -> {
+		for (final Book book : bookImporter.getBooks()) {
+			System.out.println(book.getTitle())
+		}
+	});
+}
+----
+
+The proxy approach tries to discourage you from spreading the actual service's reference in your application.
+This is important, because of the way the garbage collector and OSGi bundles interact.
+Thus, *using the actual service outside of the callback function is highly discouraged*.
