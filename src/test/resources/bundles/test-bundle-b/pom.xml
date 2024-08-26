@@ -1,0 +1,38 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<artifactId>test-bundle-b</artifactId>
+	<packaging>bundle</packaging>
+
+	<parent>
+		<groupId>org.codeturnery</groupId>
+		<artifactId>common-osgi-bundle-pom</artifactId>
+		<version>1.0.0</version>
+	</parent>
+
+	<properties>
+		<bundle-activator>org.codeturnery.osgi.fixtures.bundles.b.ActivatorImpl</bundle-activator>
+		<export-package>org.codeturnery.osgi.fixtures.bundles.b.importer</export-package>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.codeturnery</groupId>
+			<artifactId>test-bundle-contract</artifactId>
+			<version>1.0.0</version>
+			<scope>provided</scope>
+		</dependency>
+	</dependencies>
+	
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<version>3.0.1</version>
+				<configuration>
+					<doclint>all,-missing</doclint>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+</project>
