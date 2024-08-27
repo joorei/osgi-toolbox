@@ -14,8 +14,8 @@
 
 		<dependency>
 			<groupId>org.codeturnery</groupId>
-			<artifactId>toolbox-java</artifactId>
-			<version>0.1</version>
+			<artifactId>java-toolbox</artifactId>
+			<version>0.2</version>
 		</dependency>
 
 		<!-- OSGi -->
