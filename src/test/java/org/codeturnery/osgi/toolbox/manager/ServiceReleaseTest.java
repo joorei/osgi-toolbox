@@ -8,14 +8,21 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.util.ArrayList;
 
 import org.eclipse.jdt.annotation.Nullable;
 import org.junit.jupiter.api.Test;
+import org.osgi.framework.Bundle;
 import org.osgi.framework.InvalidSyntaxException;
 import org.codeturnery.osgi.fixtures.bundles.contract.BookImporter;
+import org.codeturnery.plugin.CallServiceException;
+import org.codeturnery.plugin.ExpiredException;
+import org.codeturnery.plugin.stage.InstallationException;
+import org.codeturnery.plugin.stage.RegistrationException;
+import org.codeturnery.plugin.stage.StartException;
 import org.codeturnery.proxies.LockedException;
 
 public class ServiceReleaseTest extends BundleTest {
@@ -23,13 +30,18 @@ public class ServiceReleaseTest extends BundleTest {
 	/**
 	 * This is not an actual test but shows how the reference counting of OSGi
 	 * works.
-	 * 
-	 * @throws InvalidSyntaxException
-	 * @throws StageChangeException
+	 * @throws InvalidSyntaxException 
+	 * @throws FrameworkException 
+	 * @throws StartException 
+	 * @throws InstallationException 
+	 * @throws RegistrationException 
+	 * @throws IOException 
+	 * @throws ExpiredException 
+	 * @throws BundleNotFoundException 
 	 */
 	@Test
-	public void testReleaseCounter() throws InvalidSyntaxException, StageChangeException {
-		final var startedBundle = this.bundleRegistry.registerBundle(getBundleJarFiles().get(0)).install().start();
+	public void testReleaseCounter() throws InvalidSyntaxException, FrameworkException, StartException, InstallationException, RegistrationException, IOException, ExpiredException, BundleNotFoundException {
+		final var startedBundle = this.bundleRegistry.registerPlugin(getBundleJarFiles().get(0)).install().start();
 		final var bundleContext = this.bundleRegistry.getBundleContext();
 
 		final var refsA = new ArrayList<>(bundleContext.getServiceReferences(BookImporter.class, null));
@@ -44,7 +56,7 @@ public class ServiceReleaseTest extends BundleTest {
 		var servicesInUse = bundleContext.getBundle().getServicesInUse();
 		assertNull(servicesInUse);
 
-		final var bundle = this.bundleRegistry.getBundle(startedBundle.getUri()).get();
+		final Bundle bundle = this.bundleRegistry.getBundleOrThrow(startedBundle.getUri());
 		assertNull(bundle.getServicesInUse());
 
 		final var serviceA = bundleContext.getService(ref);
@@ -74,8 +86,8 @@ public class ServiceReleaseTest extends BundleTest {
 	}
 
 	@Test
-	public void testRelease() throws StageChangeException, LoadServiceException {
-		this.bundleRegistry.registerBundle(getBundleJarFiles().get(0)).install().start();
+	public void testRelease() throws CallServiceException, StartException, InstallationException, RegistrationException, IOException, FrameworkException {
+		this.bundleRegistry.registerPlugin(getBundleJarFiles().get(0)).install().start();
 
 		@Nullable
 		OsgiServiceWrapper<BookImporter> service = getServiceWrapper();
@@ -95,9 +107,9 @@ public class ServiceReleaseTest extends BundleTest {
 
 	@Test
 	public void testReleaseMultipleServices()
-			throws StageChangeException, LoadServiceException {
+			throws CallServiceException, StartException, InstallationException, RegistrationException, IOException, FrameworkException {
 		for (final var bundleJarFile : getBundleJarFiles()) {
-			this.bundleRegistry.registerBundle(bundleJarFile).install().start();
+			this.bundleRegistry.registerPlugin(bundleJarFile).install().start();
 		}
 
 		var serviceProxies = this.bundleRegistry.loadServices(BookImporter.class);
@@ -140,7 +152,7 @@ public class ServiceReleaseTest extends BundleTest {
 		assertNull(abstractMethodError.getCause());
 	}
 
-	private OsgiServiceWrapper<BookImporter> getServiceWrapper() throws LoadServiceException {
+	private OsgiServiceWrapper<BookImporter> getServiceWrapper() throws CallServiceException {
 		final var services = this.bundleRegistry.loadServices(BookImporter.class);
 		assertEquals(1, services.size());
 		return services.get(0);

@@ -252,10 +252,10 @@ Doing so would introduce unnecessary code coupling, as the main application is n
 </dependencies>
 ----
 
-Afterwards, you can instantiate a `BundleRegistry` instance in your application.
-Technically it is possible to use multiple `BundleRegistry` instances for different sets of bundles, but this is discouraged because it does not avoid conflicts between bundles in different sets but instead makes it harder to detect them.
+Afterwards, you can instantiate a `Registry` instance in your application.
+Technically it is possible to use multiple `Registry` instances for different sets of bundles, but this is discouraged because it does not avoid conflicts between bundles in different sets but instead makes it harder to detect them.
 
-This library provides `OsgiBundleRegistry` as implementation of the `BundleRegistry` interface, though you may use a different implementation if needed.
+This library provides `OsgiBundleRegistry` as implementation of the `Registry` interface, though you may use a different implementation if needed.
 
 When instantiating the `OsgiBundleRegistry` you need to pass information about the packages of all your contract projects into its constructor.
 In our example we only created one contract project: `test-bundle-contract` with the most recent version `1.0.0`., which we pass into the constructor.
@@ -264,9 +264,9 @@ Tests have shown `javassist` and `javassist.bytecode` to be necessary too, as sh
 
 [source,java]
 ----
-final var extras = new HashSet<>(Arrays.asList(
-	"org.codeturnery.osgi.fixtures.bundles.contract.test-bundle-contact; version=1.0.0, javassist, javassist.bytecode"));
-try (final var bundleRegistry = new OsgiBundleRegistry(extras);) {
+final var extras = Set.of(
+	"org.codeturnery.osgi.fixtures.bundles.contract.test-bundle-contact; version=1.0.0, javassist, javassist.bytecode");
+try (var registry = new OsgiBundleRegistry(extras);) {
 	// …
 }
 ----
@@ -279,54 +279,54 @@ Each JAR file can only be registered once at a given time to avoid conflicts.
 [source,java]
 ----
 var bundleJarFile = new File("/path/to/the/jar/file.jar");
-RegisteredBundle bundle = bundleRegistry.registerBundle(bundleJarFile);
+RegisteredPlugin registeredPlugin = bundleRegistry.registerBundle(bundleJarFile);
 ----
 
-The `bundle` does not provide its functionalities to the application as long as it is only registered.
+The plug-in (abstracting the OSGi bundle away) does not provide its functionalities to the application as long as it is only registered.
 More on that later.
 
-To unregister a bundle you can call `bundle.unregister()`.
+To unregister a plug-in you can call `registeredPlugin.unregister()`.
 To do so it must be neither started nor installed.
 To register the bundle again, simply use the bundle container as shown above.
 
-== 5. (Optional) retrieve bundle information
+== 5. (Optional) retrieve plug-in information
 
-Even though the bundle does not provide its functionality after only being registered into the registry, it can already be used to retrieve some information, including potential conflicts via its `getConflicts()` method.
-Conflicts between different bundles can occur for different reasons.
+Even though the plug-in does not provide its functionality after only being registered into the registry, it can already be used to retrieve some information, including potential conflicts via its `getConflicts()` method.
+Conflicts between different plug-in can occur for different reasons.
 This library currently checks two different kinds:
 
 1. The `Bundle-SymbolicName` field in each of your bundles Maven `pom.xml` is supposed to be unique.
-If there are other registered bundles that use the same symbolic name as the bundle you called `getConflicts()` on, then these will be present as potential conflicts in the return, even if their version differs.
-2. Different bundles that define the same fully qualified class name with different implementation, if the content of those classes differ.
+If there are other registered plug-ins that use the same symbolic name as the plug-in you called `getConflicts()` on, then these will be present as potential conflicts in the return, even if their version differs.
+2. Different plug-ins that define the same fully qualified class name with different implementation, if the content of those classes differ.
 
-If conflicting bundles are installed or started the result may be class cast exceptions during runtime but also especially hard to debug behavioral changes: in the case that one bundle implements the conflicting class differently than the other bundle, it may use the other bundles implementation.
-Which bundle wins over which is in some cases influenced by the order in which they are installed and started, but overall hardly controllable.
+If conflicting plug-in are installed or started the result may be class cast exceptions during runtime but also especially hard to debug behavioral changes: in the case that one plug-in implements the conflicting class differently than the other plug-in, it may use the other plug-ins implementation.
+Which plug-in wins over which is in some cases influenced by the order in which they are installed and started, but overall hardly controllable.
 
-The conflicts will have no effect as long as the bundles are registered only.
-The choice of installing and starting bundles with conflicts is left to the application and not prevented by this library, as even if bundles potentially conflict they may still provide usable functionalities.
+The conflicts will have no effect as long as the plug-ins are registered only.
+The choice of installing and starting plug-ins with conflicts is left to the application and not prevented by this library, as even if bundles potentially conflict they may still provide usable functionalities, which falls under the decision of the using developer.
 
-== 6. Install and start the bundles
+== 6. Install and start the plug-ins
 
-After registering a bundle, it can be simply installed via `install()`.
+After registering a plug-in, it can be simply installed via `install()`.
 After installing it, it can be started via the `start()` method.
-Note that when changing the stage of a bundle (e.g. from registered to installed) the old reference becomes expired and must not be used anymore.
-Instead, you must use the new instance returned by the method that invoked the stage change (e.g. `install()` returning `InstalledBundle` and `uninstall()` returning `RegisteredBundle`).
+Note that when changing the stage of a plug-in (e.g. from registered to installed) *the old reference becomes expired and must not be used anymore*.
+Instead, you must use the new instance returned by the method that invoked the stage change (e.g. `install()` returning `InstalledPlugin` and `uninstall()` returning `RegisteredPlugin`).
 
-Installing a bundle is a necessary step between registration and start, but currently has otherwise no special effects.
-It may be extended in the future for dependencies between different bundles, to allow installing a dependency without starting it.
+Installing a plug-in is a necessary step between registration and start, but currently has otherwise no special effects.
+It may be extended in the future to resolve dependencies between different bundles, i.e. to allow installing a dependency without starting it.
 
-To stop a started bundle, you can use the `stop()` method.
-To uninstall a stopped bundle you can use the `uninstall()` method.
+To stop a started plug-in, you can use the `stop()` method.
+To uninstall a stopped plug-in you can use the `uninstall()` method.
 Again, the instances on which the `stop()` or `uninstall()` methods were called will return new instances and the original instances must not be used afterwards.
 
 == 7. Retrieve bundle services
 
-To use the services of your started bundles (the interface implementations you registered in your bundles `Activator`) you can fetch them wrapped inside another instances from the `BundleRegistry` and issue the logic to be executed by calling the `callService` method on each wrapper instance with a callback.
+To use the services of your started bundles (the interface implementations you registered in your bundles `Activator`) you can fetch them wrapped inside another instances from the `Registry` and issue the logic to be executed by calling the `callService` method on each wrapper instance with a callback.
 In the callback you will receive the actual service instance as parameter.
 
 [source,java]
 ----
-final List<OsgiServiceWrapper<BookImporter>> bookImporterProxies = bundleRegistry.loadServices(BookImporter.class);
+final List<OsgiServiceWrapper<BookImporter>> bookImporterProxies = registry.loadServices(BookImporter.class);
 for (final OsgiServiceWrapper<BookImporter> bookImporterProxy : bookImporterProxies) {
 	bookImporterProxy.callService(bookImporter -> {
 		for (final Book book : bookImporter.getBooks()) {

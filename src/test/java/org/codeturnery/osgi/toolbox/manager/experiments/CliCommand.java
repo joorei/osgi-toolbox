@@ -15,14 +15,14 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.codeturnery.osgi.toolbox.manager.InstallationException;
 import org.codeturnery.osgi.toolbox.manager.OsgiBundleRegistry;
-import org.codeturnery.osgi.toolbox.manager.BundleConflict;
-import org.codeturnery.osgi.toolbox.manager.RegisteredBundle;
-import org.codeturnery.osgi.toolbox.manager.RegistrationException;
+import org.codeturnery.plugin.Conflict;
+import org.codeturnery.plugin.RegisteredPlugin;
+import org.codeturnery.plugin.stage.InstallationException;
+import org.codeturnery.plugin.stage.RegistrationException;
 import org.osgi.framework.BundleException;
 
-@SuppressWarnings({"null", "nls", "unused"})
+@SuppressWarnings({"null", "nls"})
 public class CliCommand {
 	public static void main(String[] args) throws IOException, BundleException, RegistrationException, InstallationException {
 		final var options = new Options();
@@ -52,10 +52,10 @@ public class CliCommand {
 			final Set<String> dependencies = getDependencies(cmd, dependenciesOption);
 			try (final var bundleRegistry = new OsgiBundleRegistry(dependencies);) {
 				for (final File file : files) {
-					bundleRegistry.registerBundle(file);
+					bundleRegistry.registerPlugin(file);
 				}
-				final List<RegisteredBundle> bundles = bundleRegistry.getBundles();
-				printConflicts(bundles);
+				final Set<RegisteredPlugin> plugins = bundleRegistry.getRegisteredPlugins();
+				printConflicts(plugins);
 			}
 		} catch (ParseException e) {
 			System.out.println(e.getMessage());
@@ -65,17 +65,17 @@ public class CliCommand {
 		}
 	}
 
-	private static void printConflicts(final List<RegisteredBundle> bundles) {
+	private static void printConflicts(final Set<RegisteredPlugin> bundles) {
 		System.out.println("==== CONFLICTS ====");
-		for (final RegisteredBundle currentBundle : bundles) {
+		for (final RegisteredPlugin currentBundle : bundles) {
 			System.out.println("Bundle: " + currentBundle.getSymbolicNameWithVersion());
 			int i = 1;
-			for (final BundleConflict conflict : currentBundle.getConflicts()) {
+			for (final Conflict conflict : currentBundle.getConflicts()) {
 				final Set<String> classes = conflict.getConflictingClasses();
 				final String nameConflictString = conflict.isConflictingSymbolicName()
 						? " in name and"
 						: "";
-				System.out.println("#" + (i++) + " " + conflict.getConflictingBundle().getSymbolicNameWithVersion() + ": " + nameConflictString + " in " + classes.size() + " class(es):");
+				System.out.println("#" + (i++) + " " + conflict.getConflictingPlugin().getSymbolicNameWithVersion() + ": " + nameConflictString + " in " + classes.size() + " class(es):");
 				for (final String conflictingClass : classes) {
 					System.out.println(" • " + conflictingClass);
 				}

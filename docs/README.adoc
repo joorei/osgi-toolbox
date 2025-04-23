@@ -1,7 +1,7 @@
 = README
 
 This library provides a mechanism to add or remove OSGi bundles within your application during runtime.
-In sum it can be considered a simple plug-in/add-on manager.
+In sum it can be considered a simple plug-in manager.
 
 == Prerequisites
 

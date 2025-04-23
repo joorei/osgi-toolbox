@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -15,6 +16,16 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.codeturnery.osgi.fixtures.bundles.contract.Book;
 import org.codeturnery.osgi.fixtures.bundles.contract.BookImporter;
+import org.codeturnery.plugin.InstalledPlugin;
+import org.codeturnery.plugin.Plugin;
+import org.codeturnery.plugin.StartedPlugin;
+import org.codeturnery.plugin.CallServiceException;
+import org.codeturnery.plugin.stage.InstallationException;
+import org.codeturnery.plugin.stage.RegistrationException;
+import org.codeturnery.plugin.stage.StartException;
+import org.codeturnery.plugin.stage.StopException;
+import org.codeturnery.plugin.stage.UninstallationException;
+import org.codeturnery.plugin.stage.UnregistrationException;
 import org.eclipse.jdt.annotation.Nullable;
 
 /**
@@ -36,11 +47,11 @@ public class StartAndLoadOrderTest extends BundleTest {
 
 	@Test
 	public void testServicesEachInstalledAndStarted()
-			throws StageChangeException, LoadServiceException {
+			throws CallServiceException, StartException, InstallationException, RegistrationException, IOException, FrameworkException {
 		assertNotNull(this.bundleRegistry);
 		final List<File> files = getBundleJarFiles();
 		for (final File file : files) {
-			this.bundleRegistry.registerBundle(file).install().start();
+			this.bundleRegistry.registerPlugin(file).install().start();
 		}
 
 		checkBundles();
@@ -48,11 +59,11 @@ public class StartAndLoadOrderTest extends BundleTest {
 
 	@Test
 	public void testServicesEachInstalledAndStartedReversed()
-			throws StageChangeException, LoadServiceException {
+			throws CallServiceException, StartException, InstallationException, RegistrationException, IOException, FrameworkException {
 		final List<File> files = getBundleJarFiles();
 		Collections.reverse(files);
 		for (final File file : files) {
-			this.bundleRegistry.registerBundle(file).install().start();
+			this.bundleRegistry.registerPlugin(file).install().start();
 		}
 
 
@@ -61,13 +72,13 @@ public class StartAndLoadOrderTest extends BundleTest {
 
 	@Test
 	public void testServicesAllInstalledUnreversedAndThenAllStartedUnreversed()
-			throws StageChangeException, LoadServiceException {
+			throws CallServiceException, InstallationException, RegistrationException, IOException, FrameworkException {
 		final List<File> files = getBundleJarFiles();
-		final var installedBundles = new ArrayList<InstalledBundle>(files.size());
+		final var installedBundles = new ArrayList<InstalledPlugin>(files.size());
 		for (final File file : files) {
-			installedBundles.add(this.bundleRegistry.registerBundle(file).install());
+			installedBundles.add(this.bundleRegistry.registerPlugin(file).install());
 		}
-		for (final InstalledBundle installedBundle : installedBundles) {
+		for (final InstalledPlugin installedBundle : installedBundles) {
 			installedBundle.start();
 		}
 
@@ -76,15 +87,15 @@ public class StartAndLoadOrderTest extends BundleTest {
 
 	@Test
 	public void testServicesAllInstalledReversedAndThenStartUnreversed()
-			throws StageChangeException, LoadServiceException {
+			throws CallServiceException, InstallationException, RegistrationException, IOException, FrameworkException {
 		final List<File> files = getBundleJarFiles();
 		Collections.reverse(files);
-		final var installedBundles = new ArrayList<InstalledBundle>(files.size());
+		final var installedBundles = new ArrayList<InstalledPlugin>(files.size());
 		for (final File file : files) {
-			installedBundles.add(this.bundleRegistry.registerBundle(file).install());
+			installedBundles.add(this.bundleRegistry.registerPlugin(file).install());
 		}
 		Collections.reverse(installedBundles);
-		for (final InstalledBundle installedBundle : installedBundles) {
+		for (final InstalledPlugin installedBundle : installedBundles) {
 			installedBundle.start();
 		}
 
@@ -93,14 +104,14 @@ public class StartAndLoadOrderTest extends BundleTest {
 
 	@Test
 	public void testServicesAllInstalledReversedAndThenStartReversed()
-			throws StageChangeException, LoadServiceException {
+			throws CallServiceException, InstallationException, RegistrationException, IOException, FrameworkException {
 		final List<File> files = getBundleJarFiles();
 		Collections.reverse(files);
-		final var installedBundles = new ArrayList<InstalledBundle>(files.size());
+		final var installedBundles = new ArrayList<InstalledPlugin>(files.size());
 		for (final File file : files) {
-			installedBundles.add(this.bundleRegistry.registerBundle(file).install());
+			installedBundles.add(this.bundleRegistry.registerPlugin(file).install());
 		}
-		for (final InstalledBundle installedBundle : installedBundles) {
+		for (final InstalledPlugin installedBundle : installedBundles) {
 			installedBundle.start();
 		}
 
@@ -109,16 +120,16 @@ public class StartAndLoadOrderTest extends BundleTest {
 
 	@Test
 	public void testUnregisteringStartedServices()
-			throws StageChangeException, LoadServiceException {
+			throws CallServiceException, StartException, InstallationException, RegistrationException, IOException, FrameworkException {
 		final List<File> files = getBundleJarFiles();
 		for (final File file : files) {
-			this.bundleRegistry.registerBundle(file).install().start();
+			this.bundleRegistry.registerPlugin(file).install().start();
 		}
 
 
 		checkBundles();
 		
-		new ArrayList<>(this.bundleRegistry.getBundles()).stream().filter(this.bundleRegistry::isStarted).map(StartedBundle.class::cast).forEach(bundle -> {
+		new ArrayList<>(this.bundleRegistry.getPlugins()).stream().filter(Plugin::isStarted).map(StartedPlugin.class::cast).forEach(bundle -> {
 			try {
 				bundle.stop().uninstall().unregister();
 			} catch (UnregistrationException | UninstallationException | StopException e) {
@@ -135,21 +146,21 @@ public class StartAndLoadOrderTest extends BundleTest {
 
 	@Test
 	public void testServicesAllInstalledUnreversedAndThenStartReversed()
-			throws StageChangeException, LoadServiceException {
+			throws CallServiceException, InstallationException, RegistrationException, IOException, FrameworkException {
 		final List<File> files = getBundleJarFiles();
-		final var installedBundles = new ArrayList<InstalledBundle>(files.size());
+		final var installedBundles = new ArrayList<InstalledPlugin>(files.size());
 		for (final File file : files) {
-			installedBundles.add(this.bundleRegistry.registerBundle(file).install());
+			installedBundles.add(this.bundleRegistry.registerPlugin(file).install());
 		}
 		Collections.reverse(installedBundles);
-		for (final InstalledBundle installedBundle : installedBundles) {
+		for (final InstalledPlugin installedBundle : installedBundles) {
 			installedBundle.start();
 		}
 
 		checkBundles();
 	}
 	
-	private void checkBundles() {
+	private void checkBundles() throws CallServiceException, FrameworkException {
 		final List<OsgiServiceWrapper<BookImporter>> nameProviders = this.bundleRegistry
 				.loadServices(BookImporter.class);
 		Set<String> titles = new HashSet<>();
@@ -182,11 +193,11 @@ public class StartAndLoadOrderTest extends BundleTest {
 		assertEquals(4, titles.size());
 	}
 
-	private static String getTitle(OsgiServiceWrapper<BookImporter> osgiServiceWrapper) {
+	private static String getTitle(OsgiServiceWrapper<BookImporter> osgiServiceWrapper) throws CallServiceException, FrameworkException {
 		return osgiServiceWrapper.getService().getBooks().iterator().next().getTitle();
 	}
 	
-	private static void checkReturn(OsgiServiceWrapper<BookImporter> osgiServiceWrapper, String title, @Nullable String author, boolean expectedCountCatch) {
+	private static void checkReturn(OsgiServiceWrapper<BookImporter> osgiServiceWrapper, String title, @Nullable String author, boolean expectedCountCatch) throws CallServiceException, FrameworkException {
 		final var service = osgiServiceWrapper.getService();
 
 		boolean reachedCatch = false;
